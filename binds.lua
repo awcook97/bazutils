@@ -12,6 +12,7 @@ local function showHelp()
         '/bzz --class WAR --slot Arms --stat HP "Item"   Filtered search',
         '/bzz --buyIfLessThan 100 "Item"                 Buy cheapest exact match under plat',
         '/bzz --buyAllIfLessThan 100 "Item"              Buy ALL exact matches under plat',
+        '/bzz --looseMatch --buyIfLessThan 100 "Item"    Substring match instead of exact',
         '/bzz --savequery "Item"                         Save query & record prices',
         '/bzz --savequery --buyAllIfLessThan 10 "Item"   Save auto-buy query (runs hourly)',
         '/bzz --removequery "Item"                       Remove a saved query',
@@ -45,6 +46,7 @@ local function parseArgs(...)
         elseif flag == '--buyalliflessthan' then i = i + 1; opts.buyAllIfLessThan  = tonumber(raw[i])
         elseif flag == '--savequery'        then opts.saveQuery    = true
         elseif flag == '--removequery'      then opts.removeQuery  = true
+        elseif flag == '--loosematch'       then opts.looseMatch   = true
         elseif flag == '--queries'          then opts.listQueries  = true
         elseif flag == '--runquery'         then opts.runQuery     = true
         elseif flag == '--runall'           then opts.runAll       = true
@@ -104,7 +106,7 @@ function Binds.setup(bazaar)
         -----------------------------------------------------------------
         if opts.saveQuery then
             bazaar:saveQuery(opts.itemName, opts.filters,
-                opts.buyIfLessThan, opts.buyAllIfLessThan)
+                opts.buyIfLessThan, opts.buyAllIfLessThan, opts.looseMatch)
             return
         end
 
@@ -112,12 +114,12 @@ function Binds.setup(bazaar)
         -- One-off buy operations
         -----------------------------------------------------------------
         if opts.buyAllIfLessThan then
-            bazaar:buyAllIfLessThan(opts.itemName, opts.buyAllIfLessThan, opts.filters)
+            bazaar:buyAllIfLessThan(opts.itemName, opts.buyAllIfLessThan, opts.filters, opts.looseMatch)
             return
         end
 
         if opts.buyIfLessThan then
-            bazaar:buyIfLessThan(opts.itemName, opts.buyIfLessThan, opts.filters)
+            bazaar:buyIfLessThan(opts.itemName, opts.buyIfLessThan, opts.filters, opts.looseMatch)
             return
         end
 
