@@ -1,5 +1,6 @@
 local mq = require('mq')
 local logger = require('lib.lawlgames.lg-logger')
+local fs = require('lib.lawlgames.lg-fs')()
 
 local MODULE_NAME = 'BazUtils'
 
@@ -34,103 +35,32 @@ local COL = {
 local QUERY_INTERVAL = 3600
 
 ---------------------------------------------------------------------------
--- Lua table serializer (writes loadfile()-compatible .lua files)
+-- Persistence helpers (mq.pickle / mq.unpickle)
 ---------------------------------------------------------------------------
 
-local serialize -- forward declaration
-
-local function serializeValue(v, indent)
-    local t = type(v)
-    if t == 'string' then
-        return string.format('%q', v)
-    elseif t == 'number' or t == 'boolean' then
-        return tostring(v)
-    elseif t == 'table' then
-        return serialize(v, indent)
-    end
-    return 'nil'
-end
-
-serialize = function(tbl, indent)
-    indent = indent or ''
-    local ni = indent .. '    '
-    local parts = { '{\n' }
-    local n = #tbl
-
-    -- Array part
-    for i = 1, n do
-        parts[#parts + 1] = ni .. serializeValue(tbl[i], ni) .. ',\n'
-    end
-
-    -- Hash part (sorted keys for stable output)
-    local hashKeys = {}
-    for k in pairs(tbl) do
-        if type(k) ~= 'number' or k < 1 or k > n or k ~= math.floor(k) then
-            hashKeys[#hashKeys + 1] = k
-        end
-    end
-    table.sort(hashKeys, function(a, b) return tostring(a) < tostring(b) end)
-
-    for _, k in ipairs(hashKeys) do
-        local ks
-        if type(k) == 'string' and k:match('^[%a_][%w_]*$') then
-            ks = k
-        else
-            ks = '[' .. serializeValue(k, ni) .. ']'
-        end
-        parts[#parts + 1] = ni .. ks .. ' = ' .. serializeValue(tbl[k], ni) .. ',\n'
-    end
-
-    parts[#parts + 1] = indent .. '}'
-    return table.concat(parts)
-end
-
----------------------------------------------------------------------------
--- Persistence helpers
----------------------------------------------------------------------------
-
-local function trackingDir()
-    return mq.configDir .. '/bazUtils'
-end
-
-local function trackingPath()
+--- Relative path (from mq.configDir) for tracking data.
+local function trackingRelPath()
     local server = mq.TLO.EverQuest.Server() or 'Unknown'
-    return trackingDir() .. '/' .. server .. '_itemtracking.lua'
-end
-
-local function ensureDir(dir)
-    os.execute('mkdir -p "' .. dir .. '"')
+    return 'bazUtils/' .. server .. '_itemtracking.lua'
 end
 
 local function loadTracking()
-    local path = trackingPath()
-    local f = io.open(path, 'r')
-    if not f then return { Items = {} } end
-    f:close()
+    local relPath = trackingRelPath()
+    local fullPath = mq.configDir .. '/' .. relPath
+    if not fs.file_exists(fullPath) then return { Items = {} } end
 
-    local fn, err = loadfile(path)
-    if fn then
-        local ok, data = pcall(fn)
-        if ok and type(data) == 'table' then
-            data.Items = data.Items or {}
-            return data
-        end
+    local ok, data = pcall(mq.unpickle, relPath)
+    if ok and type(data) == 'table' then
+        data.Items = data.Items or {}
+        return data
     end
-    logger.Warn(MODULE_NAME, 'Failed to load tracking data: %s', err or 'bad data')
+    logger.Warn(MODULE_NAME, 'Failed to load tracking data')
     return { Items = {} }
 end
 
 local function saveTracking(data)
-    ensureDir(trackingDir())
-    local path = trackingPath()
-    local f, err = io.open(path, 'w')
-    if not f then
-        logger.Error(MODULE_NAME, 'Cannot write %s: %s', path, err or '')
-        return false
-    end
-    f:write('return ' .. serialize(data) .. '\n')
-    f:close()
-    return true
+    fs.ensure_dir(mq.configDir .. '/bazUtils')
+    mq.pickle(trackingRelPath(), data)
 end
 
 ---------------------------------------------------------------------------
@@ -525,12 +455,7 @@ function Bazaar:runDueQueries()
 end
 
 ---------------------------------------------------------------------------
--- Data accessors ("TLO" replacement)
---
--- MQ Top-Level Objects cannot be created from Lua; they require a C++
--- plugin.  These methods provide the equivalent programmatic interface.
--- Other scripts can require('bazutils.bazaar'), call Bazaar.new() or
--- share an instance, and use these accessors to read/write query data.
+-- Data accessors
 ---------------------------------------------------------------------------
 
 --- Get tracking data for a single item.
@@ -551,5 +476,87 @@ function Bazaar:reloadTracking()
     self.tracking = loadTracking()
     logger.Info(MODULE_NAME, 'Reloaded tracking data from disk')
 end
+
+---------------------------------------------------------------------------
+-- TLO: ${BazUtils}
+--
+-- Exposes bazaar tracking data as a real MQ Top-Level Object so macros
+-- and other scripts can query it:
+--   ${BazUtils.Item[Water Flask].LastSeen}
+--   ${BazUtils.Item[Water Flask].Sellers}
+--   ${BazUtils.QueryCount}
+---------------------------------------------------------------------------
+
+local bazInstance = nil -- set by Bazaar.new(); only one instance expected
+
+---@diagnostic disable: return-type-mismatch, redundant-parameter
+local BazUtilsItemType = mq.DataType.new('BazUtilsItem', {
+    Members = {
+        LastSeen = function(_, item)
+            local ls = item and item.LastSeen
+            return ls and ls.date or 'never', 'string'
+        end,
+        Sellers = function(_, item)
+            local ls = item and item.LastSeen
+            return (ls and ls.sellers) and #ls.sellers or 0, 'int'
+        end,
+        CheapestPlat = function(_, item)
+            local ls = item and item.LastSeen
+            if not ls or not ls.sellers or #ls.sellers == 0 then return 0, 'int' end
+            local min = ls.sellers[1].platinum or 0
+            for i = 2, #ls.sellers do
+                local p = ls.sellers[i].platinum or 0
+                if p < min then min = p end
+            end
+            return min, 'int'
+        end,
+        HasBuyRule = function(_, item)
+            local q = item and item.LastSeen and item.LastSeen.query
+            if not q then return false, 'bool' end
+            return (q.buyIfLessThan or q.buyAllIfLessThan) and true or false, 'bool'
+        end,
+    },
+    ToString = function(_, item)
+        if not item or not item.LastSeen then return 'NULL' end
+        return string.format('LastSeen: %s | Sellers: %d',
+            item.LastSeen.date or 'never',
+            (item.LastSeen.sellers and #item.LastSeen.sellers) or 0)
+    end,
+})
+
+local BazUtilsType = mq.DataType.new('BazUtils', {
+    Members = {
+        Item = function(_, _, idx)
+            if not bazInstance or not idx then return nil end
+            return bazInstance.tracking.Items[idx], BazUtilsItemType
+        end,
+        QueryCount = function()
+            if not bazInstance then return 0, 'int' end
+            local n = 0
+            for _ in pairs(bazInstance.tracking.Items) do n = n + 1 end
+            return n, 'int'
+        end,
+    },
+    ToString = function()
+        if not bazInstance then return 'BazUtils (not loaded)' end
+        local n = 0
+        for _ in pairs(bazInstance.tracking.Items) do n = n + 1 end
+        return string.format('BazUtils (%d queries)', n)
+    end,
+})
+
+--- Register the ${BazUtils} TLO. Called once from Bazaar.new().
+function Bazaar:registerTLO()
+    bazInstance = self
+    mq.AddTopLevelObject('BazUtils', function() return self, BazUtilsType end)
+    logger.Info(MODULE_NAME, 'Registered ${BazUtils} TLO')
+end
+
+--- Unregister the TLO (call on script exit).
+function Bazaar:unregisterTLO()
+    mq.RemoveTopLevelObject('BazUtils')
+    bazInstance = nil
+end
+---@diagnostic enable: return-type-mismatch, redundant-parameter
 
 return Bazaar

@@ -9,6 +9,7 @@ local TICK_MS = 300
 local SCHEDULE_CHECK_S = 60 -- how often (seconds) we check for due queries
 
 local bazaar = Bazaar.new()
+bazaar:registerTLO()
 Binds.setup(bazaar)
 
 local function main()
@@ -30,6 +31,7 @@ local function main()
     end
 
     Binds.teardown()
+    bazaar:unregisterTLO()
 end
 
 main()
