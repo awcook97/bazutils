@@ -185,6 +185,7 @@ end
 ---@return boolean
 function Bazaar:selectCombo(childName, value)
     if not value or value == '' then return true end
+    if not self:isOpen() then return false end
     local combo = self:wnd().Child(childName)
 
     local idx = combo.List('=' .. value)()
@@ -192,7 +193,7 @@ function Bazaar:selectCombo(childName, value)
         idx = combo.List(value)()
     end
     if idx and idx > 0 then
-        combo.Select(idx)()
+        combo.Select(idx)
         mq.delay(100)
         return true
     end
@@ -203,10 +204,11 @@ end
 
 --- Reset every filter combobox to index 1 ("Any") and clear the name field.
 function Bazaar:resetFilters()
+    if not self:isOpen() then return end
     for _, c in ipairs({ BZR_SLOT_COMBO, BZR_STAT_COMBO, BZR_RACE_COMBO, BZR_CLASS_COMBO, BZR_TYPE_COMBO }) do
-        self:wnd().Child(c).Select(1)()
+        self:wnd().Child(c).Select(1)
     end
-    self:wnd().Child(BZR_NAME_INPUT).SetText('')()
+    self:wnd().Child(BZR_NAME_INPUT).SetText('')
     mq.delay(100)
 end
 
@@ -225,7 +227,7 @@ function Bazaar:search(itemName, filters)
     self:resetFilters()
 
     if itemName and itemName ~= '' then
-        self:wnd().Child(BZR_NAME_INPUT).SetText(itemName)()
+        self:wnd().Child(BZR_NAME_INPUT).SetText(itemName)
         mq.delay(100)
     end
 
@@ -238,7 +240,7 @@ function Bazaar:search(itemName, filters)
     self.lastQuery = { itemName = itemName, filters = filters }
 
     -- Fire the query
-    self:wnd().Child(BZR_QUERY_BTN).LeftMouseUp()()
+    self:wnd().Child(BZR_QUERY_BTN).LeftMouseUp()
 
     -- Wait for results to populate
     mq.delay(5000, function()
@@ -258,6 +260,7 @@ end
 --- Read every row from the bazaar result list.
 ---@return table[]
 function Bazaar:getResults()
+    if not self:openWindow() then return {} end
     local results = {}
     local list = self:wnd().Child(BZR_ITEM_LIST)
     local count = list.Items() or 0
@@ -306,10 +309,11 @@ end
 --- Select a row in the result list and click Buy.
 ---@param row number  1-based row index
 function Bazaar:buyItem(row)
+    if not self:openWindow() then return end
     local list = self:wnd().Child(BZR_ITEM_LIST)
-    list.Select(row)()
+    list.Select(row)
     mq.delay(500)
-    self:wnd().Child(BZR_BUY_BTN).LeftMouseUp()()
+    self:wnd().Child(BZR_BUY_BTN).LeftMouseUp()
     mq.delay(2000)
 end
 
