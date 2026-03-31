@@ -51,17 +51,112 @@ local BazUtilsItemType = mq.DataType.new('BazUtilsItem', {
     end,
 })
 
+--- Parse "maxPlat|Item Name" from a TLO index string.
+---@return number|nil, string|nil
+local function parsePlatItem(idx)
+    if not idx or idx == '' then return nil, nil end
+    local plat, name = idx:match('^(%d+)|(.+)$')
+    return tonumber(plat), name
+end
+
 local BazUtilsType = mq.DataType.new('BazUtils', {
     Members = {
+        --- ${BazUtils.Item[Item Name]}
         Item = function(idx, d)
             if not d or not idx then return 'string', nil end
             return BazUtilsItemType, d.tracking.Items[idx]
         end,
+
+        --- ${BazUtils.QueryCount}
         QueryCount = function(_, d)
             if not d then return 'int', 0 end
             local n = 0
             for _ in pairs(d.tracking.Items) do n = n + 1 end
             return 'int', n
+        end,
+
+        --- ${BazUtils.Search[Item Name]} - Search and print results
+        Search = function(idx, d)
+            if not d or not idx or idx == '' then return 'bool', false end
+            d:enqueue('search:' .. idx, function()
+                if not d:search(idx, {}) then return end
+                local results = d:getResults()
+                for _, r in ipairs(results) do
+                    logger.Info(MODULE_NAME, '  %s | Qty: %d | %dp %dg %ds %dc | %s',
+                        r.name, r.quantity, r.platinum, r.gold, r.silver, r.copper, r.trader)
+                end
+            end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.BuyIfLessThan[maxPlat|Item Name]} - Buy cheapest match under plat
+        BuyIfLessThan = function(idx, d)
+            if not d then return 'bool', false end
+            local plat, name = parsePlatItem(idx)
+            if not plat or not name then return 'bool', false end
+            d:enqueue('buy:' .. name, function() d:buyIfLessThan(name, plat, {}, false) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.BuyAllIfLessThan[maxPlat|Item Name]} - Buy all matches under plat
+        BuyAllIfLessThan = function(idx, d)
+            if not d then return 'bool', false end
+            local plat, name = parsePlatItem(idx)
+            if not plat or not name then return 'bool', false end
+            d:enqueue('buyall:' .. name, function() d:buyAllIfLessThan(name, plat, {}, false) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.SaveQuery[Item Name]} - Save tracking query (no buy rule)
+        SaveQuery = function(idx, d)
+            if not d or not idx or idx == '' then return 'bool', false end
+            d:enqueue('savequery:' .. idx, function() d:saveQuery(idx, {}) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.SaveQueryBuy[maxPlat|Item Name]} - Save query with buyIfLessThan rule
+        SaveQueryBuy = function(idx, d)
+            if not d then return 'bool', false end
+            local plat, name = parsePlatItem(idx)
+            if not plat or not name then return 'bool', false end
+            d:enqueue('savequerybuy:' .. name, function() d:saveQuery(name, {}, plat, nil, false) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.SaveQueryBuyAll[maxPlat|Item Name]} - Save query with buyAllIfLessThan rule
+        SaveQueryBuyAll = function(idx, d)
+            if not d then return 'bool', false end
+            local plat, name = parsePlatItem(idx)
+            if not plat or not name then return 'bool', false end
+            d:enqueue('savequerybuyall:' .. name, function() d:saveQuery(name, {}, nil, plat, false) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.RemoveQuery[Item Name]} - Remove a saved query
+        RemoveQuery = function(idx, d)
+            if not d or not idx or idx == '' then return 'bool', false end
+            return 'bool', d:removeQuery(idx)
+        end,
+
+        --- ${BazUtils.RunQuery[Item Name]} - Run a saved query now
+        RunQuery = function(idx, d)
+            if not d or not idx or idx == '' then return 'bool', false end
+            d:enqueue('runquery:' .. idx, function() d:runQuery(idx) end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.RunAll} - Run all saved queries now
+        RunAll = function(_, d)
+            if not d then return 'bool', false end
+            d:enqueue('runall', function() d:runAllQueries() end)
+            return 'bool', true
+        end,
+
+        --- ${BazUtils.ListQueries} - Print all saved queries to console
+        ListQueries = function(_, d)
+            if not d then return 'bool', false end
+            d:listQueries()
+            return 'bool', true
         end,
     },
     ToString = function(d)

@@ -56,12 +56,30 @@ function Bazaar.new()
     self.lastQuery = {}
     self.tracking = data.load()
     self.timers = {} -- itemName -> os.time() of last scheduled run
+    self.cmdQueue = {} -- keyed set: key -> fn (deduped)
     return self
 end
 
 ---------------------------------------------------------------------------
 -- Window helpers
 ---------------------------------------------------------------------------
+
+--- Queue a function keyed by a unique string. If the same key is already
+--- pending, the new function replaces it (last-write-wins dedup).
+--- Required for TLO callbacks, which run on a non-yieldable thread.
+---@param key string
+---@param fn function
+function Bazaar:enqueue(key, fn)
+    self.cmdQueue[key] = fn
+end
+
+--- Drain and execute all queued commands. Call once per main-loop tick.
+function Bazaar:drainQueue()
+    for key, fn in pairs(self.cmdQueue) do
+        self.cmdQueue[key] = nil
+        fn()
+    end
+end
 
 function Bazaar:wnd()
     return mq.TLO.Window(BZR_WND)

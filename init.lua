@@ -20,6 +20,7 @@ local function main()
 
     while mq.TLO.EverQuest.GameState() == 'INGAME' do
         mq.doevents()
+        bazaar:drainQueue()
 
         -- Periodically fire any saved auto-buy queries whose timer expired
         local now = os.time()
