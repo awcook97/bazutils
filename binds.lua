@@ -11,7 +11,9 @@ local function showHelp()
         '/bzz "ItemName"                                 Search the bazaar',
         '/bzz --class WAR --slot Arms --stat HP "Item"   Filtered search',
         '/bzz --buyIfLessThan 100 "Item"                 Buy cheapest exact match under plat',
+        '/bzz --buyIfLessThan 100 --count 6 "Item"       Buy up to 6 listings under plat',
         '/bzz --buyAllIfLessThan 100 "Item"              Buy ALL exact matches under plat',
+        '/bzz --buyAllIfLessThan 100 --count 6 "Item"    Buy up to 6 listings (all mode) under plat',
         '/bzz --looseMatch --buyIfLessThan 100 "Item"    Substring match instead of exact',
         '/bzz --savequery "Item"                         Save query & record prices',
         '/bzz --savequery --buyAllIfLessThan 10 "Item"   Save auto-buy query (runs hourly)',
@@ -44,6 +46,7 @@ local function parseArgs(...)
         elseif flag == '--type'             then i = i + 1; opts.filters.type  = raw[i]
         elseif flag == '--buyiflessthan'    then i = i + 1; opts.buyIfLessThan     = tonumber(raw[i])
         elseif flag == '--buyalliflessthan' then i = i + 1; opts.buyAllIfLessThan  = tonumber(raw[i])
+        elseif flag == '--count'            then i = i + 1; opts.count            = tonumber(raw[i])
         elseif flag == '--savequery'        then opts.saveQuery    = true
         elseif flag == '--removequery'      then opts.removeQuery  = true
         elseif flag == '--loosematch'       then opts.looseMatch   = true
@@ -114,12 +117,12 @@ function Binds.setup(bazaar)
         -- One-off buy operations
         -----------------------------------------------------------------
         if opts.buyAllIfLessThan then
-            bazaar:buyAllIfLessThan(opts.itemName, opts.buyAllIfLessThan, opts.filters, opts.looseMatch)
+            bazaar:buyAllIfLessThan(opts.itemName, opts.buyAllIfLessThan, opts.filters, opts.looseMatch, opts.count)
             return
         end
 
         if opts.buyIfLessThan then
-            bazaar:buyIfLessThan(opts.itemName, opts.buyIfLessThan, opts.filters, opts.looseMatch)
+            bazaar:buyIfLessThan(opts.itemName, opts.buyIfLessThan, opts.filters, opts.looseMatch, opts.count)
             return
         end
 

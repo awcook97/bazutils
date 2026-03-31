@@ -51,12 +51,16 @@ local BazUtilsItemType = mq.DataType.new('BazUtilsItem', {
     end,
 })
 
---- Parse "maxPlat|Item Name" from a TLO index string.
----@return number|nil, string|nil
+--- Parse "maxPlat|Item Name" or "maxPlat|count|Item Name" from a TLO index string.
+---@return number|nil, number|nil, string|nil
 local function parsePlatItem(idx)
-    if not idx or idx == '' then return nil, nil end
-    local plat, name = idx:match('^(%d+)|(.+)$')
-    return tonumber(plat), name
+    if not idx or idx == '' then return nil, nil, nil end
+    -- Try plat|count|name first
+    local plat, count, name = idx:match('^(%d+)|(%d+)|(.+)$')
+    if plat then return tonumber(plat), tonumber(count), name end
+    -- Fall back to plat|name
+    plat, name = idx:match('^(%d+)|(.+)$')
+    return tonumber(plat), nil, name
 end
 
 local BazUtilsType = mq.DataType.new('BazUtils', {
@@ -89,21 +93,21 @@ local BazUtilsType = mq.DataType.new('BazUtils', {
             return 'bool', true
         end,
 
-        --- ${BazUtils.BuyIfLessThan[maxPlat|Item Name]} - Buy cheapest match under plat
+        --- ${BazUtils.BuyIfLessThan[maxPlat|Item Name]} or [maxPlat|count|Item Name]
         BuyIfLessThan = function(idx, d)
             if not d then return 'bool', false end
-            local plat, name = parsePlatItem(idx)
+            local plat, count, name = parsePlatItem(idx)
             if not plat or not name then return 'bool', false end
-            d:enqueue('buy:' .. name, function() d:buyIfLessThan(name, plat, {}, false) end)
+            d:enqueue('buy:' .. name, function() d:buyIfLessThan(name, plat, {}, false, count) end)
             return 'bool', true
         end,
 
-        --- ${BazUtils.BuyAllIfLessThan[maxPlat|Item Name]} - Buy all matches under plat
+        --- ${BazUtils.BuyAllIfLessThan[maxPlat|Item Name]} or [maxPlat|count|Item Name]
         BuyAllIfLessThan = function(idx, d)
             if not d then return 'bool', false end
-            local plat, name = parsePlatItem(idx)
+            local plat, count, name = parsePlatItem(idx)
             if not plat or not name then return 'bool', false end
-            d:enqueue('buyall:' .. name, function() d:buyAllIfLessThan(name, plat, {}, false) end)
+            d:enqueue('buyall:' .. name, function() d:buyAllIfLessThan(name, plat, {}, false, count) end)
             return 'bool', true
         end,
 

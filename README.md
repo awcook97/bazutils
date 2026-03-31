@@ -42,7 +42,9 @@ All commands use the `/bzz` bind.
 | `/bzz "Item Name"` | Search the Bazaar and print results |
 | `/bzz --class WAR --slot Arms --stat HP "Item"` | Filtered search |
 | `/bzz --buyIfLessThan <plat> "Item"` | Buy the cheapest exact match under `<plat>` |
+| `/bzz --buyIfLessThan <plat> --count <n> "Item"` | Buy up to `<n>` listings under `<plat>` |
 | `/bzz --buyAllIfLessThan <plat> "Item"` | Buy **all** exact matches under `<plat>` |
+| `/bzz --buyAllIfLessThan <plat> --count <n> "Item"` | Buy all, capped at `<n>` listings |
 | `/bzz --looseMatch --buyIfLessThan <plat> "Item"` | Same, but substring match instead of exact |
 | `/bzz --savequery "Item"` | Save query and record current prices |
 | `/bzz --savequery --buyIfLessThan <plat> "Item"` | Save auto-buy query (cheapest, re-runs hourly) |
@@ -76,7 +78,9 @@ All TLO members that trigger Bazaar window interaction (search, buy, save, run) 
 |---|---|---|
 | `${BazUtils.Search[Item Name]}` | bool | Search and print results to console |
 | `${BazUtils.BuyIfLessThan[plat\|Item Name]}` | bool | Buy cheapest match under plat |
+| `${BazUtils.BuyIfLessThan[plat\|count\|Item Name]}` | bool | Buy up to `count` listings under plat |
 | `${BazUtils.BuyAllIfLessThan[plat\|Item Name]}` | bool | Buy all matches under plat |
+| `${BazUtils.BuyAllIfLessThan[plat\|count\|Item Name]}` | bool | Buy all, capped at `count` listings |
 | `${BazUtils.SaveQuery[Item Name]}` | bool | Save tracking query (no buy rule) |
 | `${BazUtils.SaveQueryBuy[plat\|Item Name]}` | bool | Save query with `buyIfLessThan` rule |
 | `${BazUtils.SaveQueryBuyAll[plat\|Item Name]}` | bool | Save query with `buyAllIfLessThan` rule |
@@ -89,6 +93,8 @@ For members that take both a plat cap and an item name, the index format is `pla
 
 ```
 ${BazUtils.BuyIfLessThan[500|Water Flask]}
+${BazUtils.BuyIfLessThan[500|6|Water Flask]}
+${BazUtils.BuyAllIfLessThan[100|Cloth Cap]}
 ${BazUtils.SaveQueryBuyAll[100|Cloth Cap]}
 ```
 

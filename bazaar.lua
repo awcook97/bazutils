@@ -21,6 +21,11 @@ local BZR_ITEM_LIST   = 'BZR_ItemList'
 local BZR_CONFIRM_WND = 'BazaarConfirmationWnd'
 local BZR_USE_PLAT    = 'BZC_UsePlatButton'
 
+local QTY_WND        = 'QuantityWnd'
+local QTY_SLIDER     = 'QTYW_Slider'
+local QTY_INPUT      = 'QTYW_SliderInput'
+local QTY_ACCEPT_BTN = 'QTYW_Accept_Button'
+
 -- Result list column indices (1-based, matching UI layout)
 local COL = {
     ICON     = 1,
@@ -236,36 +241,62 @@ end
 ---------------------------------------------------------------------------
 
 --- Select a row in the result list and click Buy.
----@param row number  1-based row index
-function Bazaar:buyItem(row)
-    if not self:openWindow() then return end
+--- Returns the number of items actually purchased (accounts for quantity window).
+---@param row number      1-based row index
+---@param wantQty number  how many to buy from this listing
+---@return number purchased
+function Bazaar:buyItem(row, wantQty)
+    if not self:openWindow() then return 0 end
     local list = self:wnd().Child(BZR_ITEM_LIST)
     list.Select(row)
     mq.delay(500)
     self:wnd().Child(BZR_BUY_BTN).LeftMouseUp()
 
-    -- Wait for confirmation dialog and click "Use Platinum"
+    -- Stackable items show QuantityWnd; non-stackable go straight to ConfirmWnd
     mq.delay(3000, function()
-        return mq.TLO.Window(BZR_CONFIRM_WND).Open()
+        return mq.TLO.Window(QTY_WND).Open() or mq.TLO.Window(BZR_CONFIRM_WND).Open()
     end)
+
+    local purchased = wantQty
+    if mq.TLO.Window(QTY_WND).Open() then
+        local available = tonumber(mq.TLO.Window(QTY_WND).Child(QTY_SLIDER).Value()) or wantQty
+        local qty
+        if wantQty == 1 then
+            qty = 1
+        elseif available > wantQty then
+            qty = wantQty
+        else
+            qty = available -- buy all available
+        end
+        purchased = qty
+        mq.TLO.Window(QTY_WND).Child(QTY_INPUT).SetText(tostring(qty))
+        mq.delay(200)
+        mq.TLO.Window(QTY_WND).Child(QTY_ACCEPT_BTN).LeftMouseUp()
+        mq.delay(3000, function()
+            return mq.TLO.Window(BZR_CONFIRM_WND).Open()
+        end)
+    end
+
     if mq.TLO.Window(BZR_CONFIRM_WND).Open() then
         mq.TLO.Window(BZR_CONFIRM_WND).Child(BZR_USE_PLAT).LeftMouseUp()
         mq.delay(2000)
     else
         logger.Warn(MODULE_NAME, 'Confirmation window did not appear')
+        purchased = 0
     end
+
+    return purchased
 end
 
 --- Buy matching items from the *current* displayed list (no search).
 --- Does an exact-name compare before purchasing unless looseMatch is set.
 ---@param itemName string   Item name to match
 ---@param maxPlat  number   Maximum total price in platinum
----@param buyAll   boolean  true = keep buying all matches; false = first only
+---@param maxCount number   Maximum number of individual items to purchase
 ---@param looseMatch boolean|nil  true = substring match instead of exact
----@return number  count of purchases made
-function Bazaar:buyFromResults(itemName, maxPlat, buyAll, looseMatch)
-    local bought = 0
-    local maxIter = 200 -- safety cap
+---@return number  total items purchased
+function Bazaar:buyFromResults(itemName, maxPlat, maxCount, looseMatch)
+    local totalBought = 0
     local nameLower = itemName:lower()
 
     local function nameMatches(resultName)
@@ -275,7 +306,7 @@ function Bazaar:buyFromResults(itemName, maxPlat, buyAll, looseMatch)
         return resultName == itemName
     end
 
-    while bought < maxIter do
+    while totalBought < maxCount do
         if not self:isOpen() then break end
 
         local results = self:sortResults(self:getResults(), 'totalPlat', true)
@@ -283,38 +314,43 @@ function Bazaar:buyFromResults(itemName, maxPlat, buyAll, looseMatch)
 
         for _, item in ipairs(results) do
             if nameMatches(item.name) and item.totalPlat <= maxPlat then
-                logger.Info(MODULE_NAME, 'Buying "%s" from %s for %.1f plat (qty %d)',
-                    item.name, item.trader, item.totalPlat, item.quantity)
-                self:buyItem(item.row)
-                bought = bought + 1
-                found = true
+                local wantQty = math.min(maxCount - totalBought, item.quantity)
+                logger.Info(MODULE_NAME, 'Buying %d of "%s" from %s for %.1f plat (available %d)',
+                    wantQty, item.name, item.trader, item.totalPlat, item.quantity)
+                local got = self:buyItem(item.row, wantQty)
+                if got > 0 then
+                    totalBought = totalBought + got
+                    found = true
+                end
                 break -- re-read list; row indices shifted after purchase
             end
         end
 
-        if not found or not buyAll then break end
+        if not found then break end
     end
 
-    if bought > 0 then
-        logger.Info(MODULE_NAME, 'Purchased %d listing(s) of "%s" under %d plat', bought, itemName, maxPlat)
+    if totalBought > 0 then
+        logger.Info(MODULE_NAME, 'Purchased %d of "%s" under %d plat', totalBought, itemName, maxPlat)
     else
         logger.Info(MODULE_NAME, 'No "%s" found at or below %d plat', itemName, maxPlat)
     end
-    return bought
+    return totalBought
 end
 
---- Search then buy the single cheapest match under maxPlat.
+--- Search then buy up to `count` cheapest matches under maxPlat.
+---@param count number|nil  Max listings to purchase (default 1)
 ---@return boolean
-function Bazaar:buyIfLessThan(itemName, maxPlat, filters, looseMatch)
+function Bazaar:buyIfLessThan(itemName, maxPlat, filters, looseMatch, count)
     if not self:search(itemName, filters) then return false end
-    return self:buyFromResults(itemName, maxPlat, false, looseMatch) > 0
+    return self:buyFromResults(itemName, maxPlat, count or 1, looseMatch) > 0
 end
 
---- Search then buy ALL matches under maxPlat.
+--- Search then buy ALL matches under maxPlat, up to `count` listings.
+---@param count number|nil  Max listings to purchase (default 200)
 ---@return number bought
-function Bazaar:buyAllIfLessThan(itemName, maxPlat, filters, looseMatch)
+function Bazaar:buyAllIfLessThan(itemName, maxPlat, filters, looseMatch, count)
     if not self:search(itemName, filters) then return 0 end
-    return self:buyFromResults(itemName, maxPlat, true, looseMatch)
+    return self:buyFromResults(itemName, maxPlat, count or 200, looseMatch)
 end
 
 ---------------------------------------------------------------------------
@@ -363,9 +399,9 @@ function Bazaar:saveQuery(itemName, filters, buyIfLessThan, buyAllIfLessThan, lo
 
         -- Execute buy if configured
         if buyAllIfLessThan then
-            self:buyFromResults(itemName, buyAllIfLessThan, true, looseMatch)
+            self:buyFromResults(itemName, buyAllIfLessThan, 200, looseMatch)
         elseif buyIfLessThan then
-            self:buyFromResults(itemName, buyIfLessThan, false, looseMatch)
+            self:buyFromResults(itemName, buyIfLessThan, 1, looseMatch)
         end
     else
         -- Still persist the query definition even if the search couldn't run
@@ -435,9 +471,9 @@ function Bazaar:runQuery(itemName)
 
     -- Buy if configured
     if q.buyAllIfLessThan then
-        self:buyFromResults(itemName, q.buyAllIfLessThan, true, q.looseMatch)
+        self:buyFromResults(itemName, q.buyAllIfLessThan, 200, q.looseMatch)
     elseif q.buyIfLessThan then
-        self:buyFromResults(itemName, q.buyIfLessThan, false, q.looseMatch)
+        self:buyFromResults(itemName, q.buyIfLessThan, 1, q.looseMatch)
     end
 
     self.timers[itemName] = os.time()
