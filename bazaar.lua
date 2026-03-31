@@ -1,6 +1,6 @@
 local mq = require('mq')
 local logger = require('lib.lawlgames.lg-logger')
-local fs = require('lib.lawlgames.lg-fs')()
+local data = require('bazutils.data')
 
 local MODULE_NAME = 'BazUtils'
 
@@ -36,34 +36,7 @@ local COL = {
 -- How often (seconds) saved auto-buy queries re-execute
 local QUERY_INTERVAL = 3600
 
----------------------------------------------------------------------------
--- Persistence helpers (mq.pickle / mq.unpickle)
----------------------------------------------------------------------------
 
---- Relative path (from mq.configDir) for tracking data.
-local function trackingRelPath()
-    local server = mq.TLO.EverQuest.Server() or 'Unknown'
-    return 'bazUtils/' .. server .. '_itemtracking.lua'
-end
-
-local function loadTracking()
-    local relPath = trackingRelPath()
-    local fullPath = mq.configDir .. '/' .. relPath
-    if not fs.file_exists(fullPath) then return { Items = {} } end
-
-    local ok, data = pcall(mq.unpickle, relPath)
-    if ok and type(data) == 'table' then
-        data.Items = data.Items or {}
-        return data
-    end
-    logger.Warn(MODULE_NAME, 'Failed to load tracking data')
-    return { Items = {} }
-end
-
-local function saveTracking(data)
-    fs.ensure_dir(mq.configDir .. '/bazUtils')
-    mq.pickle(trackingRelPath(), data)
-end
 
 ---------------------------------------------------------------------------
 -- Bazaar class
@@ -81,7 +54,7 @@ function Bazaar.new()
     local self = setmetatable({}, Bazaar)
     self.lastResults = {}
     self.lastQuery = {}
-    self.tracking = loadTracking()
+    self.tracking = data.load()
     self.timers = {} -- itemName -> os.time() of last scheduled run
     return self
 end
@@ -350,7 +323,7 @@ function Bazaar:recordResults(itemName, results, queryDef)
         query   = queryDef,
     }
 
-    saveTracking(self.tracking)
+    data.save(self.tracking)
     logger.Info(MODULE_NAME, 'Recorded %d seller(s) for "%s"', #sellers, itemName)
 end
 
@@ -381,7 +354,7 @@ function Bazaar:saveQuery(itemName, filters, buyIfLessThan, buyAllIfLessThan, lo
         self.tracking.Items[itemName] = {
             LastSeen = { date = os.date('%Y-%m-%d %H:%M:%S'), sellers = {}, query = queryDef },
         }
-        saveTracking(self.tracking)
+        data.save(self.tracking)
     end
 
     self.timers[itemName] = os.time()
@@ -394,7 +367,7 @@ function Bazaar:removeQuery(itemName)
     if self.tracking.Items[itemName] then
         self.tracking.Items[itemName] = nil
         self.timers[itemName] = nil
-        saveTracking(self.tracking)
+        data.save(self.tracking)
         logger.Info(MODULE_NAME, 'Removed query for "%s"', itemName)
         return true
     end
@@ -501,92 +474,8 @@ end
 
 --- Reload tracking data from disk (useful after external edits).
 function Bazaar:reloadTracking()
-    self.tracking = loadTracking()
+    self.tracking = data.load()
     logger.Info(MODULE_NAME, 'Reloaded tracking data from disk')
 end
-
----------------------------------------------------------------------------
--- TLO: ${BazUtils}
---
--- Exposes bazaar tracking data as a real MQ Top-Level Object so macros
--- and other scripts can query it:
---   ${BazUtils.Item[Water Flask].LastSeen}
---   ${BazUtils.Item[Water Flask].Sellers}
---   ${BazUtils.QueryCount}
----------------------------------------------------------------------------
-
-local bazInstance = nil -- set by Bazaar.new(); only one instance expected
-
----@diagnostic disable: return-type-mismatch, redundant-parameter
-local BazUtilsItemType = mq.DataType.new('BazUtilsItem', {
-    Members = {
-        LastSeen = function(_, item)
-            local ls = item and item.LastSeen
-            return ls and ls.date or 'never', 'string'
-        end,
-        Sellers = function(_, item)
-            local ls = item and item.LastSeen
-            return (ls and ls.sellers) and #ls.sellers or 0, 'int'
-        end,
-        CheapestPlat = function(_, item)
-            local ls = item and item.LastSeen
-            if not ls or not ls.sellers or #ls.sellers == 0 then return 0, 'int' end
-            local min = ls.sellers[1].platinum or 0
-            for i = 2, #ls.sellers do
-                local p = ls.sellers[i].platinum or 0
-                if p < min then min = p end
-            end
-            return min, 'int'
-        end,
-        HasBuyRule = function(_, item)
-            local q = item and item.LastSeen and item.LastSeen.query
-            if not q then return false, 'bool' end
-            return (q.buyIfLessThan or q.buyAllIfLessThan) and true or false, 'bool'
-        end,
-    },
-    ToString = function(_, item)
-        if not item or not item.LastSeen then return 'NULL' end
-        return string.format('LastSeen: %s | Sellers: %d',
-            item.LastSeen.date or 'never',
-            (item.LastSeen.sellers and #item.LastSeen.sellers) or 0)
-    end,
-})
-
-local BazUtilsType = mq.DataType.new('BazUtils', {
-    Members = {
-        Item = function(_, _, idx)
-            if not bazInstance or not idx then return nil end
-            return bazInstance.tracking.Items[idx], BazUtilsItemType
-        end,
-        QueryCount = function()
-            if not bazInstance then return 0, 'int' end
-            local n = 0
-            for _ in pairs(bazInstance.tracking.Items) do n = n + 1 end
-            return n, 'int'
-        end,
-    },
-    ToString = function()
-        if not bazInstance then return 'BazUtils (not loaded)' end
-        local n = 0
-        for _ in pairs(bazInstance.tracking.Items) do n = n + 1 end
-        return string.format('BazUtils (%d queries)', n)
-    end,
-})
-
---- Register the ${BazUtils} TLO. Called once from Bazaar.new().
-function Bazaar:registerTLO()
-    bazInstance = self
-    mq.AddTopLevelObject('BazUtils', function(idx)
-        return self, BazUtilsType
-    end)
-    logger.Info(MODULE_NAME, 'Registered ${BazUtils} TLO')
-end
-
---- Unregister the TLO (call on script exit).
-function Bazaar:unregisterTLO()
-    mq.RemoveTopLevelObject('BazUtils')
-    bazInstance = nil
-end
----@diagnostic enable: return-type-mismatch, redundant-parameter
 
 return Bazaar
