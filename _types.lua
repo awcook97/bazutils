@@ -9,16 +9,15 @@
 ---@class TLO.BazUtils
 ---@field Item fun(name: string): BazUtilsItemType # Get tracking info for a specific item
 ---@field QueryCount MQInt # Number of saved queries
----@field Search fun(name: string): MQBoolean # Search and print results to console
----@field BuyIfLessThan fun(platPipeName: string): MQBoolean # Buy cheapest match; index = "maxPlat|Item Name"
----@field BuyAllIfLessThan fun(platPipeName: string): MQInt # Buy all matches; index = "maxPlat|Item Name"
----@field SaveQuery fun(name: string): MQBoolean # Save tracking query (no buy rule)
----@field SaveQueryBuy fun(platPipeName: string): MQBoolean # Save query with buyIfLessThan rule; index = "maxPlat|Item Name"
----@field SaveQueryBuyAll fun(platPipeName: string): MQBoolean # Save query with buyAllIfLessThan rule; index = "maxPlat|Item Name"
----@field RemoveQuery fun(name: string): MQBoolean # Remove a saved query
----@field RunQuery fun(name: string): MQBoolean # Run a saved query now
----@field RunAll MQBoolean # Run all saved queries now
----@field ListQueries MQBoolean # Print all saved queries to console
+--- Methods (called as Lua functions):
+---@field Search fun(itemName: string) # Search and print results to console
+---@field BuyIfLessThan fun(maxPlat: number, itemName: string) | fun(maxPlat: number, count: number, itemName: string) # Buy listings under plat
+---@field BuyAllIfLessThan fun(maxPlat: number, itemName: string) | fun(maxPlat: number, count: number, itemName: string) # Buy all listings under plat
+---@field SaveQuery fun(itemName: string, buyIfLessThan?: number, buyAllIfLessThan?: number) # Save a tracking query
+---@field RemoveQuery fun(itemName: string) # Remove a saved query
+---@field RunQuery fun(itemName: string) # Run a saved query now
+---@field RunAll fun() # Run all saved queries now
+---@field ListQueries fun() # Print all saved queries to console
 
 --- Extend the TLO class to include BazUtils
 ---@class TLO
