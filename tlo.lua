@@ -179,7 +179,7 @@ local BazUtilsType = mq.DataType.new('BazUtils', {
 ---------------------------------------------------------------------------
 
 --- Register the ${BazUtils} TLO against a Bazaar instance.
----@param bazaar Bazaar
+---@param bazaar BazaarUtility
 function tlo.register(bazaar)
     bazInstance = bazaar
     mq.AddTopLevelObject('BazUtils', function(_)

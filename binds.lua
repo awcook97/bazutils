@@ -66,7 +66,7 @@ local function parseArgs(...)
 end
 
 --- Register the /bzz bind against a Bazaar instance.
----@param bazaar Bazaar
+---@param bazaar BazaarUtility
 function Binds.setup(bazaar)
     mq.bind('/bzz', function(...)
         local opts = parseArgs(...)

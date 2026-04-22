@@ -47,11 +47,12 @@ local QUERY_INTERVAL = 3600
 -- Bazaar class
 ---------------------------------------------------------------------------
 
----@class Bazaar
+---@class BazaarUtility
 ---@field lastResults table[]
 ---@field lastQuery table
 ---@field tracking table
 ---@field timers table<string, number>
+---@field cmdQueue table<string, function>
 local Bazaar = {}
 Bazaar.__index = Bazaar
 

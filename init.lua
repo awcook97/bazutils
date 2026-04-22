@@ -1,7 +1,7 @@
 local mq = require('mq')
 local logger = require('lib.lawlgames.lg-logger')
 
-local Bazaar = require('bazutils.bazaar')
+local BazaarUtility = require('bazutils.BazaarUtility')
 local Binds  = require('bazutils.binds')
 local tlo    = require('bazutils.tlo')
 
@@ -9,7 +9,7 @@ local MODULE_NAME = 'BazUtils'
 local TICK_MS = 300
 local SCHEDULE_CHECK_S = 60 -- how often (seconds) we check for due queries
 
-local bazaar = Bazaar.new()
+local bazaar = BazaarUtility.new()
 tlo.register(bazaar)
 Binds.setup(bazaar)
 
