@@ -4,6 +4,12 @@
 
 set -euo pipefail
 
+cleanup() {
+    git checkout - 2>/dev/null || true
+    git stash pop 2>/dev/null || true
+}
+trap cleanup ERR
+
 TMPDIR=$(mktemp -d)
 cp -r . "$TMPDIR"
 
@@ -17,7 +23,9 @@ done
 
 git stash
 git checkout main
-cp "$TMPDIR"/*.lua "$TMPDIR"/lib/* lib/
+mkdir -p lib
+cp "$TMPDIR"/*.lua .
+cp "$TMPDIR"/lib/* lib/
 git add -A
 git commit -m "release: sync from dev"
 git push origin main
