@@ -1,5 +1,5 @@
 local mq = require('mq')
-local logger = require('lib.lawlgames.lg-logger')
+local logger = require('bazutils.lib.logger')
 
 local BazaarUtility = require('bazutils.BazaarUtility')
 local Binds  = require('bazutils.binds')

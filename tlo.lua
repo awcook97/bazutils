@@ -1,6 +1,6 @@
 ---@type Mq
 local mq = require('mq')
-local logger = require('lib.lawlgames.lg-logger')
+local logger = require('bazutils.lib.logger')
 
 local MODULE_NAME = 'BazUtils'
 
