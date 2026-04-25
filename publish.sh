@@ -26,6 +26,7 @@ git checkout main
 mkdir -p lib
 cp "$TMPDIR"/*.lua .
 cp "$TMPDIR"/lib/* lib/
+cp "$TMPDIR"/README.md .
 git add -A
 git commit -m "release: sync from dev"
 git push origin main
