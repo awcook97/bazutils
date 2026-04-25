@@ -5,7 +5,9 @@ local MODULE_NAME = 'BazUtils'
 
 local Binds = {}
 
-local function showHelp()
+---Shows help, if showFlags is true then shows the flags instead.
+---@param showFlags boolean?
+local function showHelp(showFlags)
     local lines = {
         '--- /bzz Usage ---',
         '/bzz "ItemName"                                 Search the bazaar',
@@ -21,8 +23,28 @@ local function showHelp()
         '/bzz --queries                                  List all saved queries',
         '/bzz --runquery "Item"                          Run a saved query now',
         '/bzz --runall                                   Run all saved queries now',
+        '/bzz --help f                                   Shows the list of flags',
         '--- Filters: --class --slot --stat --race --type ---',
     }
+    if showFlags then
+        lines = {
+            '-cl | --class',
+            '-i | --slot',
+            '-st | --stat',
+            '-r | --race',
+            '-t | --type',
+            '-b | --buyiflessthan',
+            '-ba | --buyalliflessthan',
+            '-c | --count',
+            '-s | --savequery',
+            '-rm | --removequery',
+            '-l | --loosematch',
+            '-q | --queries',
+            '-rq | --runquery',
+            '-ra | --runall',
+            '-h | --help',
+        }
+    end
     for _, l in ipairs(lines) do
         logger.Info(MODULE_NAME, l)
     end
@@ -39,21 +61,21 @@ local function parseArgs(...)
     while i <= #raw do
         local flag = raw[i]:lower()
 
-        if     flag == '--class'            then i = i + 1; opts.filters.class = raw[i]
-        elseif flag == '--slot'             then i = i + 1; opts.filters.slot  = raw[i]
-        elseif flag == '--stat'             then i = i + 1; opts.filters.stat  = raw[i]
-        elseif flag == '--race'             then i = i + 1; opts.filters.race  = raw[i]
-        elseif flag == '--type'             then i = i + 1; opts.filters.type  = raw[i]
-        elseif flag == '--buyiflessthan'    then i = i + 1; opts.buyIfLessThan     = tonumber(raw[i])
-        elseif flag == '--buyalliflessthan' then i = i + 1; opts.buyAllIfLessThan  = tonumber(raw[i])
-        elseif flag == '--count'            then i = i + 1; opts.count            = tonumber(raw[i])
-        elseif flag == '--savequery'        then opts.saveQuery    = true
-        elseif flag == '--removequery'      then opts.removeQuery  = true
-        elseif flag == '--loosematch'       then opts.looseMatch   = true
-        elseif flag == '--queries'          then opts.listQueries  = true
-        elseif flag == '--runquery'         then opts.runQuery     = true
-        elseif flag == '--runall'           then opts.runAll       = true
-        elseif flag == '--help'             then opts.help         = true
+        if     flag == '-cl' or flag == '--class'            then i = i + 1; opts.filters.class = raw[i]
+        elseif flag == '-i' or flag == '--slot'             then i = i + 1; opts.filters.slot  = raw[i]
+        elseif flag == '-st' or flag == '--stat'             then i = i + 1; opts.filters.stat  = raw[i]
+        elseif flag == '-r' or flag == '--race'             then i = i + 1; opts.filters.race  = raw[i]
+        elseif flag == '-t' or flag == '--type'             then i = i + 1; opts.filters.type  = raw[i]
+        elseif flag == '-b' or flag == '--buyiflessthan'    then i = i + 1; opts.buyIfLessThan     = tonumber(raw[i])
+        elseif flag == '-ba' or flag == '--buyalliflessthan' then i = i + 1; opts.buyAllIfLessThan  = tonumber(raw[i])
+        elseif flag == '-c' or flag == '--count'            then i = i + 1; opts.count            = tonumber(raw[i])
+        elseif flag == '-s' or flag == '--savequery'        then opts.saveQuery    = true
+        elseif flag == '-rm' or flag == '--removequery'      then opts.removeQuery  = true
+        elseif flag == '-l' or flag == '--loosematch'       then opts.looseMatch   = true
+        elseif flag == '-q' or flag == '--queries'          then opts.listQueries  = true
+        elseif flag == '-rq' or flag == '--runquery'         then opts.runQuery     = true
+        elseif flag == '-ra' or flag == '--runall'           then opts.runAll       = true
+        elseif flag == '-h' or flag == '--help'             then opts.help         = true; if raw[i+1] == 'f' then opts.showFlags = true else opts.showFlags = false end
         else   nameWords[#nameWords + 1] = raw[i]
         end
 
@@ -74,7 +96,7 @@ function Binds.setup(bazaar)
         -----------------------------------------------------------------
         -- Commands that don't need an item name
         -----------------------------------------------------------------
-        if opts.help        then showHelp();                return end
+        if opts.help        then showHelp(opts.showFlags);                return end
         if opts.listQueries then bazaar:listQueries();      return end
         if opts.runAll      then bazaar:runAllQueries();     return end
 
