@@ -58,6 +58,24 @@ All commands use the `/bzz` bind.
 
 `--class`, `--slot`, `--stat`, `--race`, `--type` — match the display text in the Bazaar UI comboboxes.
 
+### Flags & Short-hand (Should be self explanatory)
+
+`-cl  | --class`
+`-i   | --slot`
+`-st  | --stat`
+`-r   | --race`
+`-t   | --type`
+`-b   | --buyiflessthan`
+`-ba  | --buyalliflessthan`
+`-c   | --count`
+`-s   | --savequery`
+`-rm  | --removequery`
+`-l   | --loosematch`
+`-q   | --queries`
+`-rq  | --runquery`
+`-ra  | --runall`
+`-h   | --help`
+
 ## TLO: `${BazUtils}`
 
 All TLO members that trigger Bazaar window interaction (search, buy, save, run) are **asynchronous** — they enqueue the work and return `true` immediately. The operation executes on the next main-loop tick.
