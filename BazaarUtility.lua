@@ -123,7 +123,7 @@ end
 ---@return boolean
 function Bazaar:openWindow()
     if not self:isOpen() then
-        mq.cmd('/baz')
+        self:wnd().DoOpen()
         mq.delay(3000, function() return self:isOpen() end)
     end
     if not self:isOpen() then
