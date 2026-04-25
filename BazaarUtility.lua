@@ -108,7 +108,7 @@ end
 ---------------------------------------------------------------------------
 
 ---@private
----@return any
+---@return window|fun()
 function Bazaar:wnd()
     return mq.TLO.Window(C.BZR_WND)
 end
@@ -215,10 +215,12 @@ function Bazaar:search(itemName, filters)
     if filters.type  then self:selectCombo(C.BZR_TYPE_COMBO,  filters.type)  end
 
     self.lastQuery = { itemName = itemName, filters = filters }
-
+    mq.delay(3000, function()
+        return self:wnd().Child(C.BZR_QUERY_BTN).Enabled() 
+    end)
     self:wnd().Child(C.BZR_QUERY_BTN).LeftMouseUp()
 
-    mq.delay(5000, function()
+    mq.delay(7000, function()
         return (self:wnd().Child(C.BZR_ITEM_LIST).Items() or 0) > 0
     end)
     mq.delay(1000) -- extra settle time
@@ -238,7 +240,8 @@ end
 ---@return number
 local function readNum(list, row, col)
     local raw = list.List(row, col)() or '0'
-    return tonumber(raw:gsub(',', '')) or 0
+    logger.Trace('BazaarUtility', "Row: %d, Col: %d, Raw:%s.", row, col, raw)
+    return tonumber(raw:gsub(',', ''), 10) or 0
 end
 
 --- Read every row from the bazaar result list.
@@ -297,11 +300,13 @@ end
 ---@return number purchased
 function Bazaar:buyItem(row, wantQty)
     if not self:openWindow() then return 0 end
+    local attempts = 0
+    :: retry ::
     local list = self:wnd().Child(C.BZR_ITEM_LIST)
     list.Select(row)
     mq.delay(500)
     self:wnd().Child(C.BZR_BUY_BTN).LeftMouseUp()
-
+    attempts = attempts + 1
     -- Stackable items show QuantityWnd; non-stackable go straight to ConfirmWnd
     mq.delay(3000, function()
         return mq.TLO.Window(C.QTY_WND).Open() or mq.TLO.Window(C.BZR_CONFIRM_WND).Open()
@@ -331,6 +336,7 @@ function Bazaar:buyItem(row, wantQty)
         mq.TLO.Window(C.BZR_CONFIRM_WND).Child(C.BZR_USE_PLAT).LeftMouseUp()
         mq.delay(2000)
     else
+        if attempts < 3 then goto retry end
         logger.Warn(MODULE_NAME, 'Confirmation window did not appear')
         purchased = 0
     end
