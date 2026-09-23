@@ -126,5 +126,4 @@ Tracking data is saved per-server to:
 
 ## Dependencies
 
-- [`lg-logger`](https://github.com/lawlgames/lg-logger) (`lib.lawlgames.lg-logger`)
-- [`lg-fs`](https://github.com/lawlgames/lg-fs) (`lib.lawlgames.lg-fs`)
+Included!
